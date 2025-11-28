@@ -1,3 +1,6 @@
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -223,12 +226,21 @@
 </head>
 <body>
     <?php
-        // include '../back/connection.php';
         include 'navbar.php';
+        
+        // Afficher les messages d'erreur ou de succès
+        if (isset($_SESSION['login_error'])) {
+            echo '<div style="background: #ff4757; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center;">' . htmlspecialchars($_SESSION['login_error']) . '</div>';
+            unset($_SESSION['login_error']);
+        }
+        if (isset($_SESSION['login_success'])) {
+            echo '<div style="background: #2ed573; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center;">' . htmlspecialchars($_SESSION['login_success']) . '</div>';
+            unset($_SESSION['login_success']);
+        }
     ?>
     
     <!-- Formulaire de connexion -->
-    <form action="conection.php" method="POST">
+    <form action="../back/login.php" method="POST">
         <h1>Connexion</h1>
         
         <label for="username"><b>Nom d'utilisateur</b></label>

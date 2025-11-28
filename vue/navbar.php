@@ -242,8 +242,8 @@
     <ul class="menu">
         <?php if(isset($_SESSION['user'])): ?>
             <div class="user-info">
-                <img src="<?= htmlspecialchars($_SESSION['user']['avatar'] ?? 'uploads/default-avatar.png') ?>" alt="Avatar">
-                <span><?= htmlspecialchars($_SESSION['user']['prenom']) ?></span>
+                <img src="<?= htmlspecialchars($_SESSION['user']['avatar'] ?? 'uploads/default.png') ?>" alt="Avatar" onerror="this.src='uploads/default.png'">
+                <span><?= htmlspecialchars($_SESSION['user']['prenom'] ?? 'Utilisateur') ?></span>
             </div>
             <li><a href="category.php">Accueil</a></li>
             <li><a href="profil.php">Mon Profil</a></li>

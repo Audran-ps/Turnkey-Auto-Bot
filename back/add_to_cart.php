@@ -12,7 +12,7 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
     $_SESSION['cart_error'] = 'Erreur de connexion à la base de données';
-    header('Location: category.php');
+    header('Location: ../vue/category.php');
     exit;
 }
 
@@ -77,16 +77,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id_product'])) {
         $_SESSION['cart_error'] = 'Erreur lors de l\'ajout au panier : ' . $e->getMessage();
     }
     
-    // Redirection
-    $redirectUrl = $_POST['redirect_url'] ?? 'category.php';
+    // Redirection vers la page category.php dans le dossier vue
+    $redirectUrl = $_POST['redirect_url'] ?? '../vue/category.php';
+    // Si l'URL ne commence pas par ../, c'est qu'elle est relative au dossier vue
+    if (strpos($redirectUrl, '../') === false && strpos($redirectUrl, 'http') === false) {
+        $redirectUrl = '../vue/' . $redirectUrl;
+    }
     if (isset($_GET['category'])) {
-        $redirectUrl .= '?category=' . intval($_GET['category']);
+        $separator = strpos($redirectUrl, '?') !== false ? '&' : '?';
+        $redirectUrl .= $separator . 'category=' . intval($_GET['category']);
     }
     header('Location: ' . $redirectUrl);
     exit;
 }
 
 // Si accès direct sans POST, rediriger
-header('Location: category.php');
+header('Location: ../vue/category.php');
 exit;
 ?>

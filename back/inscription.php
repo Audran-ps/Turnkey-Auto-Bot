@@ -15,8 +15,11 @@ $password = '';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
-    die("❌ Erreur de connexion : " . $e->getMessage());
+    $_SESSION['inscription_error'] = 'Erreur de connexion à la base de données. Veuillez vérifier que la table "client" existe.';
+    header('Location: ../vue/inscription.php');
+    exit;
 }
 
 // Récupération des données du formulaire
@@ -33,9 +36,27 @@ if ($password !== $confirm_password) {
 
 $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-// Insertion dans la base de données
+// Vérifier si la table client existe
 try {
-    $sql = "INSERT INTO users (name, username, email, password) VALUES (:nom, :prenom, :email, :hashedPassword)";
+    $testStmt = $pdo->query("SELECT 1 FROM client LIMIT 1");
+} catch (PDOException $e) {
+    $_SESSION['inscription_error'] = 'ERREUR : La table "client" n\'existe pas dans la base de données. Veuillez exécuter le fichier "creer_tables.sql" dans phpMyAdmin.';
+    header('Location: ../vue/inscription.php');
+    exit;
+}
+
+// Vérifier si l'email existe déjà
+$checkStmt = $pdo->prepare("SELECT * FROM client WHERE email = :email");
+$checkStmt->execute([':email' => $email]);
+if ($checkStmt->fetch()) {
+    $_SESSION['inscription_error'] = 'Cet email est déjà utilisé';
+    header('Location: ../vue/inscription.php');
+    exit;
+}
+
+// Insertion dans la base de données (table client)
+try {
+    $sql = "INSERT INTO client (nom, prenom, email, mpd) VALUES (:nom, :prenom, :email, :hashedPassword)";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
         ':nom' => $name,
@@ -43,8 +64,20 @@ try {
         ':email' => $email,
         ':hashedPassword' => $hashedPassword,
     ]);
+    
+    $_SESSION['inscription_success'] = 'Inscription réussie ! Vous êtes maintenant connecté.';
+    
+    // Connecter automatiquement l'utilisateur après inscription
+    $_SESSION['user'] = [
+        'id' => $pdo->lastInsertId(),
+        'nom' => $name,
+        'prenom' => $username,
+        'email' => $email
+    ];
 } catch (PDOException $e) {
-    die("❌ Erreur lors de l'inscription : " . $e->getMessage());
+    $_SESSION['inscription_error'] = 'Erreur lors de l\'inscription : ' . $e->getMessage();
+    header('Location: ../vue/inscription.php');
+    exit;
 }
 
 // ⚡ Envoi d'email avec PHPMailer
@@ -79,7 +112,11 @@ try {
     ";
 
     $mail->send();
-    echo "✅ Inscription réussie ! Un email de confirmation a été envoyé à <strong>$email</strong>.";
+    // Redirection vers la page d'accueil après inscription réussie
+    header('Location: ../vue/category.php');
+    exit;
 } catch (Exception $e) {
-    echo "⚠️ Inscription réussie, mais l'email n'a pas pu être envoyé. Erreur : {$mail->ErrorInfo}";
+    // Même si l'email échoue, l'inscription est réussie
+    header('Location: ../vue/category.php');
+    exit;
 }

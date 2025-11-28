@@ -6,6 +6,37 @@ if (!isset($_SESSION['panier'])) {
     $_SESSION['panier'] = [];
 }
 
+// Connexion à la base de données pour récupérer les vraies données des produits
+$host = 'localhost';
+$dbname = 'ecommerce';
+$user = 'root';
+$password = '';
+
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // Récupérer les vraies données des produits depuis la BDD
+    foreach ($_SESSION['panier'] as &$item) {
+        if (isset($item['id'])) {
+            $stmt = $pdo->prepare('SELECT * FROM product WHERE id_product = :id');
+            $stmt->execute([':id' => $item['id']]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($product) {
+                // Mettre à jour avec les vraies données
+                $item['name'] = $product['name_product'] ?? $item['name'] ?? 'Produit sans nom';
+                $item['price'] = floatval($product['price_product'] ?? $item['price'] ?? 0);
+                $item['image'] = $product['picture_product'] ?? $item['image'] ?? 'default.png';
+            }
+        }
+    }
+    unset($item); // Important : libérer la référence
+} catch (PDOException $e) {
+    // En cas d'erreur, on continue avec les données de session
+    error_log('Erreur BDD panier: ' . $e->getMessage());
+}
+
 // Traitement des actions AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
@@ -16,7 +47,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $quantity = intval($_POST['quantity']);
             if (isset($_SESSION['panier'][$index]) && $quantity > 0) {
                 $_SESSION['panier'][$index]['quantity'] = $quantity;
-                echo json_encode(['success' => true]);
+                // Recalculer le total pour la réponse
+                $itemTotal = $_SESSION['panier'][$index]['price'] * $quantity;
+                $newTotal = 0;
+                foreach ($_SESSION['panier'] as $item) {
+                    $newTotal += $item['price'] * $item['quantity'];
+                }
+                echo json_encode([
+                    'success' => true,
+                    'itemTotal' => number_format($itemTotal, 2, ',', ' '),
+                    'total' => number_format($newTotal, 2, ',', ' ')
+                ]);
             } else {
                 echo json_encode(['success' => false]);
             }
@@ -26,7 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $index = intval($_POST['index']);
             if (isset($_SESSION['panier'][$index])) {
                 array_splice($_SESSION['panier'], $index, 1);
-                echo json_encode(['success' => true]);
+                // Recalculer le total
+                $newTotal = 0;
+                foreach ($_SESSION['panier'] as $item) {
+                    $newTotal += $item['price'] * $item['quantity'];
+                }
+                echo json_encode([
+                    'success' => true,
+                    'total' => number_format($newTotal, 2, ',', ' '),
+                    'itemCount' => count($_SESSION['panier'])
+                ]);
             } else {
                 echo json_encode(['success' => false]);
             }
@@ -598,6 +648,18 @@ foreach ($_SESSION['panier'] as $item) {
 </head>
 <body>
 
+<?php
+    // Afficher les messages de session
+    if (isset($_SESSION['cart_message'])) {
+        echo '<div class="toast show" id="cartToast">' . htmlspecialchars($_SESSION['cart_message']) . '</div>';
+        unset($_SESSION['cart_message']);
+    }
+    if (isset($_SESSION['cart_error'])) {
+        echo '<div class="toast error show" id="cartToast">' . htmlspecialchars($_SESSION['cart_error']) . '</div>';
+        unset($_SESSION['cart_error']);
+    }
+?>
+
 <header>
     <div class="logo">
         <a href="category.php">N<span>anos</span></a>
@@ -639,19 +701,45 @@ foreach ($_SESSION['panier'] as $item) {
                     <div class="cart-item" data-index="<?= $index ?>">
                         <div class="cart-item-image">
                             <?php 
-                            $imagePath = 'uploads/' . $item['image'];
-                            if (!file_exists($imagePath)) {
-                                $imagePath = 'uploads/default.png';
+                            // Gestion intelligente du chemin d'image
+                            $imageFile = $item['image'] ?? '';
+                            $imagePath = '';
+                            
+                            // Essayer plusieurs chemins possibles
+                            if (!empty($imageFile)) {
+                                // Essayer directement avec le nom du fichier
+                                $imagePath = 'uploads/' . $imageFile;
+                                if (!file_exists($imagePath)) {
+                                    // Essayer avec l'ID du produit
+                                    $imagePath = 'uploads/' . ($item['id'] ?? '') . '.png';
+                                    if (!file_exists($imagePath)) {
+                                        // Essayer juste le numéro
+                                        $imagePath = 'uploads/' . ($item['id'] ?? '') . '.jpg';
+                                        if (!file_exists($imagePath)) {
+                                            $imagePath = 'uploads/default.png';
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Si pas d'image, essayer avec l'ID
+                                if (isset($item['id'])) {
+                                    $imagePath = 'uploads/' . $item['id'] . '.png';
+                                    if (!file_exists($imagePath)) {
+                                        $imagePath = 'uploads/default.png';
+                                    }
+                                } else {
+                                    $imagePath = 'uploads/default.png';
+                                }
                             }
                             ?>
-                            <img src="<?= $imagePath ?>" alt="<?= htmlspecialchars($item['name']) ?>">
+                            <img src="<?= $imagePath ?>" alt="<?= htmlspecialchars($item['name'] ?? 'Produit') ?>" onerror="this.src='uploads/default.png'">
                         </div>
                         
                         <div class="cart-item-details">
                             <div>
-                                <div class="cart-item-title"><?= htmlspecialchars($item['name']) ?></div>
+                                <div class="cart-item-title"><?= htmlspecialchars($item['name'] ?? 'Produit sans nom') ?></div>
                                 <div class="cart-item-info">
-                                    <span>Prix unitaire: <?= number_format($item['price'], 2) ?> €</span>
+                                    <span>Prix unitaire: <?= number_format(floatval($item['price'] ?? 0), 2, ',', ' ') ?> €</span>
                                 </div>
                             </div>
                             
@@ -664,7 +752,7 @@ foreach ($_SESSION['panier'] as $item) {
                         
                         <div class="cart-item-actions">
                             <button class="remove-btn" data-index="<?= $index ?>" title="Supprimer">×</button>
-                            <div class="item-price"><?= number_format($item['price'] * $item['quantity'], 2) ?> €</div>
+                            <div class="item-price" data-unit-price="<?= floatval($item['price'] ?? 0) ?>"><?= number_format(floatval($item['price'] ?? 0) * intval($item['quantity'] ?? 1), 2, ',', ' ') ?> €</div>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -675,7 +763,7 @@ foreach ($_SESSION['panier'] as $item) {
                 
                 <div class="summary-row">
                     <span>Sous-total</span>
-                    <span id="subtotal"><?= number_format($total, 2) ?> €</span>
+                    <span id="subtotal"><?= number_format($total, 2, ',', ' ') ?> €</span>
                 </div>
                 
                 <div class="summary-row">
@@ -693,7 +781,7 @@ foreach ($_SESSION['panier'] as $item) {
                 
                 <div class="summary-row total">
                     <span>Total</span>
-                    <span id="total"><?= number_format($total, 2) ?> €</span>
+                    <span id="total"><?= number_format($total, 2, ',', ' ') ?> €</span>
                 </div>
                 
                 <button class="checkout-btn" onclick="window.location.href='checkout.php'">
@@ -727,6 +815,13 @@ function showToast(message, isError = false) {
 }
 
 function updateCart(index, quantity) {
+    // Désactiver les boutons pendant la mise à jour
+    const item = document.querySelector(`.cart-item[data-index="${index}"]`);
+    if (!item) return;
+    
+    const buttons = item.querySelectorAll('.quantity-btn, .quantity-input');
+    buttons.forEach(btn => btn.disabled = true);
+    
     fetch('panier.php', {
         method: 'POST',
         headers: {
@@ -737,15 +832,76 @@ function updateCart(index, quantity) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            location.reload();
+            // Mettre à jour le prix de l'article avec la valeur du serveur
+            const priceElement = item.querySelector('.item-price');
+            if (priceElement && data.itemTotal) {
+                priceElement.textContent = data.itemTotal + ' €';
+            } else {
+                updateItemPrice(index, quantity);
+            }
+            // Mettre à jour le total avec la valeur du serveur
+            if (data.total) {
+                const subtotalElement = document.getElementById('subtotal');
+                const totalElement = document.getElementById('total');
+                if (subtotalElement) subtotalElement.textContent = data.total.replace('.', ',') + ' €';
+                if (totalElement) totalElement.textContent = data.total.replace('.', ',') + ' €';
+            } else {
+                updateTotal();
+            }
+            // Mettre à jour le compteur du panier
+            updateCartCount();
+            showToast('Quantité mise à jour');
         } else {
             showToast('Erreur lors de la mise à jour', true);
         }
+        // Réactiver les boutons
+        buttons.forEach(btn => btn.disabled = false);
+    })
+    .catch(error => {
+        showToast('Erreur lors de la mise à jour', true);
+        buttons.forEach(btn => btn.disabled = false);
     });
+}
+
+function updateItemPrice(index, quantity) {
+    const item = document.querySelector(`.cart-item[data-index="${index}"]`);
+    if (item) {
+        const priceElement = item.querySelector('.item-price');
+        const unitPrice = parseFloat(priceElement.dataset.unitPrice || priceElement.textContent.replace(' €', '').replace(',', '.'));
+        const totalPrice = (unitPrice * quantity).toFixed(2);
+        priceElement.textContent = totalPrice.replace('.', ',') + ' €';
+    }
+}
+
+function updateTotal() {
+    let subtotal = 0;
+    document.querySelectorAll('.cart-item').forEach(item => {
+        const priceText = item.querySelector('.item-price').textContent;
+        const price = parseFloat(priceText.replace(' €', '').replace(',', '.'));
+        subtotal += price;
+    });
+    
+    const subtotalElement = document.getElementById('subtotal');
+    const totalElement = document.getElementById('total');
+    
+    if (subtotalElement) {
+        subtotalElement.textContent = subtotal.toFixed(2).replace('.', ',') + ' €';
+    }
+    if (totalElement) {
+        totalElement.textContent = subtotal.toFixed(2).replace('.', ',') + ' €';
+    }
 }
 
 function removeItem(index) {
     if (confirm('Voulez-vous vraiment supprimer cet article ?')) {
+        const item = document.querySelector(`.cart-item[data-index="${index}"]`);
+        if (item) {
+            // Animation de suppression
+            item.style.transition = 'all 0.3s ease';
+            item.style.opacity = '0';
+            item.style.transform = 'translateX(-100px)';
+        }
+        
         fetch('panier.php', {
             method: 'POST',
             headers: {
@@ -757,16 +913,71 @@ function removeItem(index) {
         .then(data => {
             if (data.success) {
                 showToast('Article supprimé avec succès');
-                setTimeout(() => location.reload(), 1000);
+                setTimeout(() => {
+                    if (item) item.remove();
+                    // Mettre à jour le total avec la valeur du serveur
+                    if (data.total) {
+                        const subtotalElement = document.getElementById('subtotal');
+                        const totalElement = document.getElementById('total');
+                        if (subtotalElement) subtotalElement.textContent = data.total.replace('.', ',') + ' €';
+                        if (totalElement) totalElement.textContent = data.total.replace('.', ',') + ' €';
+                    } else {
+                        updateTotal();
+                    }
+                    updateCartCount();
+                    // Vérifier si le panier est vide
+                    if (document.querySelectorAll('.cart-item').length === 0) {
+                        location.reload();
+                    }
+                }, 300);
             } else {
                 showToast('Erreur lors de la suppression', true);
+                if (item) {
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateX(0)';
+                }
+            }
+        })
+        .catch(error => {
+            showToast('Erreur lors de la suppression', true);
+            if (item) {
+                item.style.opacity = '1';
+                item.style.transform = 'translateX(0)';
             }
         });
     }
 }
 
+function updateCartCount() {
+    let totalQuantity = 0;
+    document.querySelectorAll('.quantity-input').forEach(input => {
+        totalQuantity += parseInt(input.value) || 0;
+    });
+    
+    const cartCountElement = document.getElementById('cartCount');
+    if (cartCountElement) {
+        cartCountElement.textContent = totalQuantity;
+    }
+    
+    // Mettre à jour aussi le header si présent
+    const headerCartCount = document.querySelector('header .cart-count');
+    if (headerCartCount) {
+        headerCartCount.textContent = totalQuantity;
+    }
+}
+
 function clearCart() {
     if (confirm('Voulez-vous vraiment vider votre panier ?')) {
+        // Animation de suppression de tous les articles
+        const items = document.querySelectorAll('.cart-item');
+        items.forEach((item, index) => {
+            setTimeout(() => {
+                item.style.transition = 'all 0.3s ease';
+                item.style.opacity = '0';
+                item.style.transform = 'translateX(-100px)';
+            }, index * 50);
+        });
+        
         fetch('panier.php', {
             method: 'POST',
             headers: {
@@ -778,7 +989,7 @@ function clearCart() {
         .then(data => {
             if (data.success) {
                 showToast('Panier vidé avec succès');
-                setTimeout(() => location.reload(), 1000);
+                setTimeout(() => location.reload(), 500);
             }
         });
     }
@@ -819,6 +1030,17 @@ document.querySelectorAll('.remove-btn').forEach(btn => {
         const index = this.dataset.index;
         removeItem(index);
     });
+});
+
+// Gestion du toast initial
+document.addEventListener('DOMContentLoaded', function() {
+    const toast = document.getElementById('cartToast');
+    if (toast) {
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
 });
 </script>
 

@@ -240,6 +240,19 @@ if (!isset($_SESSION['captcha_code'])) {
 <body>
     <div class="signup-container">
         <h2>Inscription</h2>
+        
+        <?php
+            // Afficher les messages d'erreur ou de succès
+            if (isset($_SESSION['inscription_error'])) {
+                echo '<div style="background: #ff4757; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center;">' . htmlspecialchars($_SESSION['inscription_error']) . '</div>';
+                unset($_SESSION['inscription_error']);
+            }
+            if (isset($_SESSION['inscription_success'])) {
+                echo '<div style="background: #2ed573; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center;">' . htmlspecialchars($_SESSION['inscription_success']) . '</div>';
+                unset($_SESSION['inscription_success']);
+            }
+        ?>
+        
         <form action="../back/inscription.php" method="post">
             <div class="form-group">
                 <label for="username">Nom :</label>

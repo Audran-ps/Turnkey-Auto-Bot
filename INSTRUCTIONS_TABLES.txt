@@ -1,0 +1,59 @@
+═══════════════════════════════════════════════════════════════
+  INSTRUCTIONS POUR CRÉER LES TABLES DANS LA BASE DE DONNÉES
+═══════════════════════════════════════════════════════════════
+
+⚠️ IMPORTANT : Vous devez exécuter le script SQL avant d'utiliser l'application !
+
+═══════════════════════════════════════════════════════════════
+  ÉTAPE PAR ÉTAPE :
+═══════════════════════════════════════════════════════════════
+
+1. Ouvrez votre navigateur et allez sur :
+   http://localhost/phpmyadmin
+
+2. Dans le menu de gauche, cliquez sur la base de données "ecommerce"
+   (Si elle n'existe pas, créez-la d'abord)
+
+3. Cliquez sur l'onglet "SQL" en haut de la page
+
+4. Ouvrez le fichier "creer_tables.sql" dans un éditeur de texte
+   (Notepad, Bloc-notes, etc.)
+
+5. Sélectionnez TOUT le contenu du fichier (Ctrl+A) et copiez-le (Ctrl+C)
+
+6. Collez le contenu dans la zone de texte SQL de phpMyAdmin (Ctrl+V)
+
+7. Cliquez sur le bouton "Exécuter" (ou appuyez sur Ctrl+Entrée)
+
+8. Vous devriez voir un message : "5 requêtes exécutées avec succès"
+
+═══════════════════════════════════════════════════════════════
+  VÉRIFICATION :
+═══════════════════════════════════════════════════════════════
+
+Pour vérifier que les tables ont été créées :
+
+1. Dans phpMyAdmin, cliquez sur "ecommerce" dans le menu de gauche
+2. Vous devriez voir ces tables :
+   ✓ client
+   ✓ commande
+   ✓ commande_details
+   ✓ product
+   ✓ category
+
+═══════════════════════════════════════════════════════════════
+  EN CAS DE PROBLÈME :
+═══════════════════════════════════════════════════════════════
+
+Si vous voyez une erreur :
+- Vérifiez que vous êtes bien connecté à MySQL
+- Vérifiez que la base de données "ecommerce" existe
+- Assurez-vous d'avoir les droits d'administration
+
+Si une table existe déjà :
+- C'est normal, le script utilise "IF NOT EXISTS"
+- Les tables existantes ne seront pas modifiées
+
+═══════════════════════════════════════════════════════════════
+
+
